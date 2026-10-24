@@ -63,6 +63,11 @@ Web Search/Subagent 没有加入默认运行配置，本轮不执行它们的安
 与 API Key 环境变量；端点和密钥应从运行时环境注入，不写入跟踪配置。无模型
 探针与安装入口仍分别使用 `PiNoModelProbe` 和 `PiComponentInstaller`。
 
+模型 Agent 默认把自定义模型上下文窗口显式设为 262,144 token，并在估算上下文
+超过 90% 时自动压缩（`reserveTokens=26,214`）；压缩后保留最近 20,000 token。
+可通过 `kwargs.context_window` 和 `kwargs.compaction_trigger_ratio` 覆盖窗口与
+触发比例。该上下文元数据由 Pi 使用；Harbor 本身不从 vLLM 自动同步它。
+
 ## 结果与限制
 
 结果位于每个 Trial 的 `agent/probes/`：

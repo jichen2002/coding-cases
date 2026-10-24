@@ -1,6 +1,7 @@
 """Harbor Pi component adapter, installer-only, and model-free probe entry points."""
 import json
 from pathlib import Path
+import shlex
 
 from pydantic import Field, field_validator
 from harbor.agents.installed.pi import Pi, PiOptions
@@ -9,9 +10,37 @@ from harbor.models.agent.context import AgentContext
 
 from scripts.pi_components import AGENT_DIR, install_components, manifest, resolve
 
+DEFAULT_CONTEXT_WINDOW = 262_144
+DEFAULT_COMPACTION_TRIGGER_RATIO = 0.9
+DEFAULT_KEEP_RECENT_TOKENS = 20_000
+
+
+def compaction_settings(context_window: int, trigger_ratio: float) -> dict:
+    """Build Pi settings with the reserve needed to trigger at the requested ratio."""
+    reserve_tokens = round(context_window * (1 - trigger_ratio))
+    return {
+        "compaction": {
+            "enabled": True,
+            "reserveTokens": reserve_tokens,
+            "keepRecentTokens": DEFAULT_KEEP_RECENT_TOKENS,
+        }
+    }
+
+
+def set_model_context_window(models_json: dict, context_window: int) -> dict:
+    """Set context metadata on the generated Harbor custom model entry."""
+    for provider in models_json.get("providers", {}).values():
+        for model in provider.get("models", []):
+            model["contextWindow"] = context_window
+    return models_json
+
 
 class PiComponentOptions(PiOptions):
     components: list[str] = Field(default_factory=list)
+    context_window: int = Field(default=DEFAULT_CONTEXT_WINDOW, ge=1)
+    compaction_trigger_ratio: float = Field(
+        default=DEFAULT_COMPACTION_TRIGGER_RATIO, gt=0, lt=1
+    )
 
     @field_validator("components")
     @classmethod
@@ -31,6 +60,12 @@ class PiComponentAgent(Pi):
     options_model = PiComponentOptions
     options: PiComponentOptions
 
+    def _build_custom_models_json(self, access, model_id: str):
+        models_json = super()._build_custom_models_json(access, model_id)
+        if models_json is not None:
+            set_model_context_window(models_json, self.options.context_window)
+        return models_json
+
     async def install(self, environment: BaseEnvironment) -> None:
         self.selection = manifest(self.options.components)
         reports = self.logs_dir / "probes"
@@ -42,6 +77,23 @@ class PiComponentAgent(Pi):
             raise ValueError(f"PI_CODING_AGENT_DIR must be {AGENT_DIR}")
         await super().install(environment)
         await install_components(self, environment, self.options.components)
+        await self._ensure_config_dir(environment)
+        settings = compaction_settings(
+            self.options.context_window,
+            self.options.compaction_trigger_ratio,
+        )
+        script = (
+            "const fs=require('node:fs');"
+            "const p=process.env.PI_CODING_AGENT_DIR+'/settings.json';"
+            "const c=fs.existsSync(p)?JSON.parse(fs.readFileSync(p,'utf8')):{};"
+            f"const incoming={json.dumps(settings)};"
+            "c.compaction={...(c.compaction||{}),...incoming.compaction};"
+            "fs.writeFileSync(p,JSON.stringify(c,null,2)+'\\n');"
+        )
+        await self.exec_as_agent(
+            environment,
+            command='. "$HOME/.nvm/nvm.sh"; node -e ' + shlex.quote(script),
+        )
         self.selection["installation"] = "completed"
         self.selection_path.write_text(json.dumps(self.selection, indent=2) + "\n")
 

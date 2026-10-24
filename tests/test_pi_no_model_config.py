@@ -6,7 +6,12 @@ import unittest
 from harbor.models.job.config import JobConfig
 from pydantic import ValidationError
 
-from scripts.pi_no_model_agent import PiComponentAgent, PiNoModelProbe
+from scripts.pi_no_model_agent import (
+    PiComponentAgent,
+    PiNoModelProbe,
+    compaction_settings,
+    set_model_context_window,
+)
 from scripts.pi_components import manifest
 
 
@@ -28,6 +33,27 @@ class ComponentConfigTest(unittest.TestCase):
         options = PiComponentAgent.options_model.model_validate(kwargs)
         self.assertEqual(options.components, ["lsp"])
         self.assertEqual(options.model_api, "openai-completions")
+        self.assertEqual(options.context_window, 262144)
+        self.assertEqual(options.compaction_trigger_ratio, 0.9)
+
+    def test_pi_context_and_compaction_defaults_are_written_explicitly(self):
+        settings = compaction_settings(262144, 0.9)
+        self.assertEqual(
+            settings,
+            {
+                "compaction": {
+                    "enabled": True,
+                    "reserveTokens": 26214,
+                    "keepRecentTokens": 20000,
+                }
+            },
+        )
+        model = {"providers": {"harbor-endpoint": {"models": [{"id": "Qwen3.5-9B"}]}}}
+        configured = set_model_context_window(model, 262144)
+        self.assertEqual(
+            configured["providers"]["harbor-endpoint"]["models"][0]["contextWindow"],
+            262144,
+        )
 
     def test_supported_selections_pass_harbor_preflight(self):
         for components in ([], ["lsp"], ["ast-search"], ["todo"], ["skills"], ["lsp", "skills"]):
