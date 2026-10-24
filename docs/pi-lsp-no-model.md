@@ -27,7 +27,7 @@ PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}" \
 | `[]` | Pi | Baseline CLI/SDK 审计，无 LSP 包、工具或 Skill |
 | `["lsp"]` | Pi、Pyright、pi-diet-lsp | LSP CLI/SDK 审计和能力探针 |
 
-当前仅支持这两种选择，默认 `components=[]`；未知组件、重复组件及非法类型
+本示例选择这两组，默认 `components=[]`；其它组件见 [扩展说明](pi-components-no-model.md)。未知组件、重复组件及非法类型
 会在 Harbor Preflight 阶段报错，不创建容器。若只验证一组，保留 JSON 的
 `agents` 数组中对应的一项即可。
 

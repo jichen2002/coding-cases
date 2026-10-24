@@ -11,8 +11,14 @@ import { parseArgs } from "node:util";
 const { values } = parseArgs({ options: {
   variant: { type: "string" }, output: { type: "string" },
   "case-root": { type: "string", default: "/testbed" },
+  manifest: { type: "string" },
 } });
-assert(["baseline", "lsp"].includes(values.variant), "--variant baseline|lsp is required");
+assert(values.manifest, "--manifest is required");
+const selection = JSON.parse(await readFile(values.manifest, "utf8"));
+const components = selection.components;
+assert(components.every(c => ["lsp", "ast-search", "todo", "skills"].includes(c)),
+  "This component is excluded from testing");
+assert.equal(values.variant, selection.variant);
 assert(values.output, "--output is required");
 assert(process.env.PI_CODING_AGENT_DIR, "PI_CODING_AGENT_DIR is required");
 const agentDir = process.env.PI_CODING_AGENT_DIR;
@@ -24,12 +30,11 @@ const globalPackages = JSON.parse(execFileSync("npm", ["ls", "-g", "--depth=0", 
   { encoding: "utf8" })).dependencies;
 const { createAgentSession, DefaultResourceLoader, SessionManager } =
   await import(pathToFileURL(path.join(packageRoot, "dist/index.js")));
-const lspNames = ["lsp_definition", "lsp_diagnostics", "lsp_hover", "lsp_references", "lsp_symbols"];
 const expectedActive = ["bash", "edit", "read", "write",
-  ...(values.variant === "lsp" ? lspNames : [])].sort();
+  ...selection.expectedTools].sort();
 const report = {
   schemaVersion: 1, variant: values.variant, piVersion: metadata.version,
-  components: values.variant === "lsp" ? ["lsp"] : [], globalPackages,
+  components, globalPackages, limitations: selection.limitations,
   nodeVersion: process.version, uid: process.getuid(), agentDir,
   pythonEnvironment: JSON.parse(execFileSync("python", ["-c",
     "import sys,json; print(json.dumps(dict(executable=sys.executable, version=sys.version)))"],
@@ -64,9 +69,33 @@ async function openSession(cwd) {
   assert.deepEqual(errors, [], "Extension startup failed");
   const activeTools = session.getActiveToolNames().sort();
   assert.deepEqual(activeTools, expectedActive, "Unexpected active tools");
+  assert.equal(extensions.extensions.length, selection.expectedExtensions + 1,
+    "Unexpected extension loaded (the extra extension is the model-request guard)");
   const skills = loader.getSkills();
-  assert.deepEqual(skills.skills, [], "Unexpected Skills contaminate the variant");
+  assert.deepEqual(skills.skills.map(s => s.name).sort(), selection.expectedSkills,
+    "Unexpected Skills contaminate the variant");
+  const extensionPackages = [];
+  for (const extension of extensions.extensions) {
+    if (!path.isAbsolute(extension.resolvedPath)) continue;
+    let dir = path.dirname(extension.resolvedPath);
+    while (dir !== path.dirname(dir)) {
+      try {
+        const pkg = JSON.parse(await readFile(path.join(dir, "package.json"), "utf8"));
+        extensionPackages.push({ name: pkg.name, version: pkg.version });
+        break;
+      } catch (error) {
+        if (error.code !== "ENOENT") throw error;
+        dir = path.dirname(dir);
+      }
+    }
+  }
+  for (const expected of selection.expectedPackages) {
+    const i = expected.lastIndexOf("@");
+    assert(extensionPackages.some(p => p.name === expected.slice(0, i) && p.version === expected.slice(i + 1)),
+      `Wrong or missing extension package: ${expected}`);
+  }
   report.sessions.push({ cwd, activeTools, allTools: session.getAllTools(),
+    extensionPackages,
     extensions: extensions.extensions.map(e => e.resolvedPath),
     skills: skills.skills, skillDiagnostics: skills.diagnostics });
   return session;
@@ -96,7 +125,15 @@ try {
     assert(!globalPackages["pi-diet-lsp"], "Baseline unexpectedly contains the LSP package");
     assert(!project.getAllTools().some(t => t.name.startsWith("lsp_")));
     assert.equal(report.sessions[0].extensions.length, 1, "Unexpected baseline extension");
-  } else {
+  }
+  for (const [component, packageName] of [["lsp", "pyright"], ["ast-search", "@ast-grep/cli"]]) {
+    if (!components.includes(component)) assert(!globalPackages[packageName], `Unexpected package ${packageName}`);
+  }
+  for (const expected of selection.expectedGlobalPackages) {
+    const i = expected.lastIndexOf("@");
+    assert.equal(globalPackages[expected.slice(0, i)]?.version, expected.slice(i + 1));
+  }
+  if (components.includes("lsp")) {
     const pluginPaths = report.sessions[0].extensions.filter(p => p.includes("pi-diet-lsp"));
     assert.equal(pluginPaths.length, 1, "Expected exactly one LSP extension");
     const plugin = JSON.parse(await readFile(path.join(path.dirname(pluginPaths[0]), "package.json"), "utf8"));
@@ -135,6 +172,42 @@ try {
       character: lines[line].indexOf("InheritDocstrings") + 1,
     });
     assert.match(hover, /InheritDocstrings/, "Actual Case hover failed");
+  }
+  if (components.includes("ast-search")) {
+    report.astGrepVersion = execFileSync("ast-grep", ["--version"], { encoding: "utf8" }).trim();
+    assert.match(report.astGrepVersion, /\b0\.45\.3\b/);
+    const result = await call(project, "ast_grep_run", {
+      pattern: "add_one($VALUE)", lang: "python",
+      code: "answer = add_one(41)\nother = unrelated(42)\n",
+    });
+    assert.match(result, /add_one\(41\)/);
+    assert(!result.includes("unrelated(42)"), "AST search included an unrelated call");
+    const source = await call(project, "ast_grep_run", {
+      kind: "class_definition", lang: "python", path: "astropy/utils/misc.py", max_results: 20,
+    });
+    assert.match(source, /InheritDocstrings/);
+    const outline = await call(project, "ast_grep_outline", { path: "astropy/utils/misc.py" });
+    assert.match(outline, /InheritDocstrings/);
+  }
+  if (components.includes("todo")) {
+    assert.match(await call(project, "todo", { action: "list" }), /No todos/);
+    assert.match(await call(project, "todo", { action: "add", text: "Verify component installation" }), /Added todo #1/);
+    assert.match(await call(project, "todo", { action: "list" }), /Verify component installation/);
+    assert.match(await call(project, "todo", { action: "toggle", id: 1 }), /completed/);
+    assert.match(await call(project, "todo", { action: "list" }), /\[x\]/);
+    assert.match(await call(project, "todo", { action: "clear" }), /Cleared 1 todos/);
+    assert.match(await call(project, "todo", { action: "list" }), /No todos/);
+  }
+  if (components.includes("skills")) {
+    const companions = ["diagnosing-bugs/SKILL.md", "diagnosing-bugs/scripts/hitl-loop.template.sh",
+      "tdd/SKILL.md", "tdd/tests.md", "tdd/mocking.md"];
+    report.skillFiles = [];
+    for (const file of companions) {
+      const target = path.join(agentDir, "skills", file);
+      assert((await readFile(target, "utf8")).trim(), `Missing Skill resource: ${file}`);
+      report.skillFiles.push(target);
+    }
+    report.skillsDiscovered = selection.expectedSkills;
   }
   assert.equal(report.providerRequests, 0);
   for (const session of sessions) assert.deepEqual(session.messages, [], "Unexpected model conversation");

@@ -1,0 +1,43 @@
+{
+  "provider": "auto",
+  "webSearch": {
+    "enabled": true
+  },
+  "workflow": "none",
+  "toolActivation": "eager",
+  "tools": {
+    "webSearch": {
+      "enabled": true
+    },
+    "sourceCheck": {
+      "enabled": false
+    },
+    "fetchContent": {
+      "enabled": false
+    },
+    "getSearchContent": {
+      "enabled": false
+    }
+  },
+  "commands": {
+    "websearch": {
+      "enabled": false
+    },
+    "curator": {
+      "enabled": false
+    },
+    "search": {
+      "enabled": false
+    },
+    "google-account": {
+      "enabled": false
+    }
+  },
+  "allowBrowserCookies": false,
+  "image": {
+    "enabled": false
+  },
+  "pdf": {
+    "enabled": false
+  }
+}
