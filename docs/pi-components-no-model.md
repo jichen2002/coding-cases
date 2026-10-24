@@ -55,6 +55,14 @@ Web Search/Subagent 没有加入默认运行配置，本轮不执行它们的安
 `selection.json` 对安装完成和验证状态分别记录，未测试时保持
 `verification=not_tested`，不能将安装完成解释为测试通过。
 
+## 模型执行入口
+
+`scripts.pi_no_model_agent:PiComponentAgent` 复用相同的组件安装逻辑，随后
+交给 Harbor Pi Agent 正常执行模型请求。自定义 OpenAI 兼容端点通过
+`kwargs.model_api` 选择 API 方言，并由 Harbor 的模型连接配置提供 Base URL
+与 API Key 环境变量；端点和密钥应从运行时环境注入，不写入跟踪配置。无模型
+探针与安装入口仍分别使用 `PiNoModelProbe` 和 `PiComponentInstaller`。
+
 ## 结果与限制
 
 结果位于每个 Trial 的 `agent/probes/`：

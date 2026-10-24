@@ -6,11 +6,29 @@ import unittest
 from harbor.models.job.config import JobConfig
 from pydantic import ValidationError
 
-from scripts.pi_no_model_agent import PiNoModelProbe
+from scripts.pi_no_model_agent import PiComponentAgent, PiNoModelProbe
 from scripts.pi_components import manifest
 
 
 class ComponentConfigTest(unittest.TestCase):
+    def test_model_enabled_component_agent_accepts_custom_endpoint(self):
+        kwargs = {
+            "version": "1.4.0",
+            "components": ["lsp"],
+            "model_api": "openai-completions",
+        }
+        PiComponentAgent.preflight(
+            kwargs=kwargs,
+            env={
+                "OPENAI_BASE_URL": "http://127.0.0.1:8000/v1",
+                "OPENAI_API_KEY": "EMPTY",
+                "PI_CODING_AGENT_DIR": "/tmp/harbor-pi-agent",
+            },
+        )
+        options = PiComponentAgent.options_model.model_validate(kwargs)
+        self.assertEqual(options.components, ["lsp"])
+        self.assertEqual(options.model_api, "openai-completions")
+
     def test_supported_selections_pass_harbor_preflight(self):
         for components in ([], ["lsp"], ["ast-search"], ["todo"], ["skills"], ["lsp", "skills"]):
             with self.subTest(components=components):
@@ -36,6 +54,11 @@ class ComponentConfigTest(unittest.TestCase):
         for agent in config.agents:
             PiNoModelProbe.preflight(kwargs=agent.kwargs, env={})
         self.assertIn("HTTPS_PROXY", config.verifier.env)
+        for key in ("NO_PROXY", "no_proxy"):
+            self.assertIn("10.0.0.0/8", config.agents[0].env[key])
+            self.assertIn("172.16.0.0/12", config.verifier.env[key])
+            self.assertIn("192.168.0.0/16", config.agents[1].env[key])
+            self.assertIn("169.254.0.0/16", config.verifier.env[key])
 
     def test_extended_example_only_runs_allowed_probes(self):
         path = Path(__file__).resolve().parents[1] / "experiments/pi-components-no-model.json"

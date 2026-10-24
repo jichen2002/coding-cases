@@ -1,4 +1,4 @@
-"""Harbor installation and model-free component validation entry points."""
+"""Harbor Pi component adapter, installer-only, and model-free probe entry points."""
 import json
 from pathlib import Path
 
@@ -26,13 +26,10 @@ class PiNoModelProbeOptions(PiComponentOptions):
         return resolve(components, for_probe=True)
 
 
-class PiComponentInstaller(Pi):
-    """Explicit installation only. No load/capability checks or model execution."""
+class PiComponentAgent(Pi):
+    """Run Pi with locally registered components installed into its agent dir."""
     options_model = PiComponentOptions
     options: PiComponentOptions
-
-    async def run(self, instruction: str, environment: BaseEnvironment, context: AgentContext) -> None:
-        raise RuntimeError("This entry point requires install_only=true; model execution is disabled")
 
     async def install(self, environment: BaseEnvironment) -> None:
         self.selection = manifest(self.options.components)
@@ -47,6 +44,13 @@ class PiComponentInstaller(Pi):
         await install_components(self, environment, self.options.components)
         self.selection["installation"] = "completed"
         self.selection_path.write_text(json.dumps(self.selection, indent=2) + "\n")
+
+
+class PiComponentInstaller(PiComponentAgent):
+    """Explicit installation only. Model execution is disabled."""
+
+    async def run(self, instruction: str, environment: BaseEnvironment, context: AgentContext) -> None:
+        raise RuntimeError("This entry point requires install_only=true; model execution is disabled")
 
 
 class PiNoModelProbe(PiComponentInstaller):
