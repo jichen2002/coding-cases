@@ -1,0 +1,32 @@
+{
+  "jobs_dir": "jobs",
+  "install_only": true,
+  "n_attempts": 1,
+  "n_concurrent_trials": 1,
+  "retry": { "max_retries": 0 },
+  "environment": { "type": "docker" },
+  "agents": [{
+    "import_path": "scripts.pi_no_model_agent:PiNoModelProbe",
+    "kwargs": { "version": "1.4.0" },
+    "env": {
+      "PI_CODING_AGENT_DIR": "/tmp/harbor-pi-agent",
+      "HTTP_PROXY": "${EXPERIMENT_PROXY_CONTAINER}",
+      "HTTPS_PROXY": "${EXPERIMENT_PROXY_CONTAINER}",
+      "http_proxy": "${EXPERIMENT_PROXY_CONTAINER}",
+      "https_proxy": "${EXPERIMENT_PROXY_CONTAINER}",
+      "NO_PROXY": "localhost,127.0.0.1",
+      "no_proxy": "localhost,127.0.0.1"
+    }
+  }],
+  "verifier": {
+    "env": {
+      "HTTP_PROXY": "${EXPERIMENT_PROXY_CONTAINER}",
+      "HTTPS_PROXY": "${EXPERIMENT_PROXY_CONTAINER}",
+      "http_proxy": "${EXPERIMENT_PROXY_CONTAINER}",
+      "https_proxy": "${EXPERIMENT_PROXY_CONTAINER}",
+      "NO_PROXY": "localhost,127.0.0.1",
+      "no_proxy": "localhost,127.0.0.1"
+    }
+  },
+  "tasks": [{ "path": "benchmarks/swe-bench-verified/astropy__astropy-7166" }]
+}
