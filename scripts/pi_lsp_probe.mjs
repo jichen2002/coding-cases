@@ -20,6 +20,8 @@ const npmRoot = execFileSync("npm", ["root", "-g"], { encoding: "utf8" }).trim()
 const packageRoot = path.join(npmRoot, "@earendil-works/pi-coding-agent");
 const metadata = JSON.parse(await readFile(path.join(packageRoot, "package.json"), "utf8"));
 assert.equal(metadata.version, "1.4.0", "This probe is verified against Pi 1.4.0");
+const globalPackages = JSON.parse(execFileSync("npm", ["ls", "-g", "--depth=0", "--json"],
+  { encoding: "utf8" })).dependencies;
 const { createAgentSession, DefaultResourceLoader, SessionManager } =
   await import(pathToFileURL(path.join(packageRoot, "dist/index.js")));
 const lspNames = ["lsp_definition", "lsp_diagnostics", "lsp_hover", "lsp_references", "lsp_symbols"];
@@ -27,6 +29,7 @@ const expectedActive = ["bash", "edit", "read", "write",
   ...(values.variant === "lsp" ? lspNames : [])].sort();
 const report = {
   schemaVersion: 1, variant: values.variant, piVersion: metadata.version,
+  components: values.variant === "lsp" ? ["lsp"] : [], globalPackages,
   nodeVersion: process.version, uid: process.getuid(), agentDir,
   pythonEnvironment: JSON.parse(execFileSync("python", ["-c",
     "import sys,json; print(json.dumps(dict(executable=sys.executable, version=sys.version)))"],
@@ -89,6 +92,8 @@ try {
   report.cliAudit = cli;
   const project = await openSession(values["case-root"]);
   if (values.variant === "baseline") {
+    assert(!globalPackages.pyright, "Baseline unexpectedly contains Pyright");
+    assert(!globalPackages["pi-diet-lsp"], "Baseline unexpectedly contains the LSP package");
     assert(!project.getAllTools().some(t => t.name.startsWith("lsp_")));
     assert.equal(report.sessions[0].extensions.length, 1, "Unexpected baseline extension");
   } else {
