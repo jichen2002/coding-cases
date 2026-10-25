@@ -31,6 +31,7 @@ storage_mb = 10240
 gpus = 0
 allow_internet = true
 mcp_servers = []
+docker_image = "harbor-local/django__django-11734:f3eec990ce450b34"
 
 [environment.env]
 

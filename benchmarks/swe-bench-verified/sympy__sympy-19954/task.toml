@@ -31,6 +31,7 @@ storage_mb = 10240
 gpus = 0
 allow_internet = true
 mcp_servers = []
+docker_image = "harbor-local/sympy__sympy-19954:482f87efa1ed5cb0"
 
 [environment.env]
 

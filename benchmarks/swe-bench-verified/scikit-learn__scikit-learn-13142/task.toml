@@ -31,6 +31,7 @@ storage_mb = 10240
 gpus = 0
 allow_internet = true
 mcp_servers = []
+docker_image = "harbor-local/scikit-learn__scikit-learn-13142:85d9dae9e060f7d2"
 
 [environment.env]
 

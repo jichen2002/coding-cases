@@ -31,6 +31,7 @@ storage_mb = 10240
 gpus = 0
 allow_internet = true
 mcp_servers = []
+docker_image = "harbor-local/astropy__astropy-13236:29fd8a1fbb15948e"
 
 [environment.env]
 

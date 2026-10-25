@@ -31,6 +31,7 @@ storage_mb = 10240
 gpus = 0
 allow_internet = true
 mcp_servers = []
+docker_image = "harbor-local/sphinx-doc__sphinx-7454:99e077e55303b813"
 
 [environment.env]
 

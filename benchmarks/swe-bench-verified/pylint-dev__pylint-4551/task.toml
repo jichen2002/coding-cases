@@ -31,6 +31,7 @@ storage_mb = 10240
 gpus = 0
 allow_internet = true
 mcp_servers = []
+docker_image = "harbor-local/pylint-dev__pylint-4551:a27b95b8180f050f"
 
 [environment.env]
 

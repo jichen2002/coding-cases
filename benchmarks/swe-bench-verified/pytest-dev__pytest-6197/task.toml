@@ -31,6 +31,7 @@ storage_mb = 10240
 gpus = 0
 allow_internet = true
 mcp_servers = []
+docker_image = "harbor-local/pytest-dev__pytest-6197:da8c716c7100f90f"
 
 [environment.env]
 

@@ -31,6 +31,7 @@ storage_mb = 10240
 gpus = 0
 allow_internet = true
 mcp_servers = []
+docker_image = "harbor-local/pallets__flask-5014:1c1603a7c5a9709a"
 
 [environment.env]
 

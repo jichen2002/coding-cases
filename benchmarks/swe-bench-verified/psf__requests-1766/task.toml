@@ -31,6 +31,7 @@ storage_mb = 10240
 gpus = 0
 allow_internet = true
 mcp_servers = []
+docker_image = "harbor-local/psf__requests-1766:ced1fd9c501742cd"
 
 [environment.env]
 

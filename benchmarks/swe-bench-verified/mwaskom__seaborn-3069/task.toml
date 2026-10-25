@@ -31,6 +31,7 @@ storage_mb = 10240
 gpus = 0
 allow_internet = true
 mcp_servers = []
+docker_image = "harbor-local/mwaskom__seaborn-3069:da3a0c9924994a2d"
 
 [environment.env]
 

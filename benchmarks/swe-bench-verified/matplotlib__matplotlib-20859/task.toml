@@ -31,6 +31,7 @@ storage_mb = 10240
 gpus = 0
 allow_internet = true
 mcp_servers = []
+docker_image = "harbor-local/matplotlib__matplotlib-20859:585d6f87673a50cd"
 
 [environment.env]
 
