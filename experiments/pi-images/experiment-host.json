@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "cases": {
+    "astropy__astropy-7166": {
+      "case": "astropy__astropy-7166",
+      "base_image": "harbor-local/astropy__astropy-7166:1ea65be86880a878",
+      "image": "harbor-local/astropy__astropy-7166-pi:2573aa266cbd7a00ea5f",
+      "image_id": "sha256:94df61f61732ee809fac5add6d0a2fe6d3d7552b1059477f4ed4874cbf476e5d",
+      "build_key": "2573aa266cbd7a00ea5fb2aa57822ebfaf8cad0462d71e2fd918e6f8b4d1b596",
+      "node_version": "22.23.4",
+      "nvm_version": "0.40.2",
+      "recipe_version": 1,
+      "base_image_id": "sha256:24683d93236e4e7d6cd7ec838ef3f2d555c39149d35066074516e3b5c7ec949b",
+      "dockerfile_sha256": "57938fbb9f3555174e911eef4d45d1035d1dac4b8e24a712a2bfa007ebab145b",
+      "nvm_sha256": "9290aec6cc2efc89273e16a77214eb37303caaff8c943102de5116fdef47ba86",
+      "node_sha256": "1805bcd35e6815559bd2eb97db438d3fdb0eb3a5e6a977b7c1badca76337e9ce"
+    }
+  }
+}

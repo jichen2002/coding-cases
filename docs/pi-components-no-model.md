@@ -93,6 +93,48 @@ Dockerfile 目前针对 root 和 Linux x64；其他执行用户或架构需要�
 `PIP_INDEX_URL`、`UV_DEFAULT_INDEX`、`npm_config_registry`，并清空代理变量。
 构建时使用的文件、镜像来源、校验值和运行时 registry 应保留在实验记录中。
 
+### 按 Case 构建和选择镜像
+
+`scripts/pi_image_cases.py` 将基础镜像 ID、Dockerfile 和预装文件的摘要纳入
+镜像名称，并在本机清单中记录实际镜像 ID。它核验固定版本 nvm 和 Node
+安装文件的 SHA-256，离线构建派生镜像；不会修改原始 Case：
+
+```bash
+python scripts/pi_image_cases.py build \
+  --case benchmarks/swe-bench-verified/astropy__astropy-7166 \
+  --context jobs/.inputs/preinstalled-node-build \
+  --manifest experiments/pi-images/local.json
+```
+
+构建上下文包含 `nvm.sh` 和 `node.tar.xz`，材料下载和核验需要在构建前
+完成。当前方案仅支持已在 `task.toml` 的 `environment.docker_image` 绑定、
+本机存在的 amd64 基础镜像。每个 Case 可分别运行 `build`，共用一份清单。
+仓库跟踪 `experiments/pi-images/local.json` 和 `experiment-host.json`，分别
+记录开发机与实验机已构建的镜像。清单可通过 Git 同步，但 Docker 镜像本身
+不会随 Git 同步；其他机器需先准备匹配的镜像或为其单独构建并记录清单。
+生成前会检查实际镜像 ID，清单过期或在错误的机器上使用时会报错。
+
+以现有的 JSON Job 文件作为模板，运行以下命令生成新的独立实验输入目录：
+
+```bash
+python scripts/pi_image_cases.py prepare \
+  --template jobs/.inputs/pi-images/probe-template.json \
+  --manifest experiments/pi-images/local.json \
+  --output jobs/.inputs/pi-images/run-001
+PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}" harbor run \
+  -c jobs/.inputs/pi-images/run-001/job.json
+```
+
+模板应列出本地 Case 路径，并按实验要求分别配置 Agent 与 Verifier 的镜像
+源和代理变量；上面的文件名只是本机示例，不是仓库内提供的模板。
+`prepare` 校验两个镜像 ID 和 Case 绑定，复制 Case 到新目录，仅修改副本的
+`task.toml`，并为 Pi 组件 adapter 设置 `preinstalled_node=true`。生成的
+`image-manifest.json` 包含输入 Case 配置摘要和实际镜像记录；输出目录必须
+不存在，以避免覆盖既有实验。非 Pi Agent（如 Oracle）保持原配置。运行前
+仍应检查模板是否启用了预期的组件和网络环境。模板必须在 `tasks` 中逐项
+列出本地 Case，不支持 `datasets` 展开；使用内置 `pi` Agent 会被拒绝，应
+选用 Pi 组件 adapter，以确保真正复用预装 Node。
+
 ## 结果与限制
 
 结果位于每个 Trial 的 `agent/probes/`：
