@@ -103,13 +103,13 @@ Dockerfile 目前针对 root 和 Linux x64；其他执行用户或架构需要�
 python scripts/pi_image_cases.py build \
   --case benchmarks/swe-bench-verified/astropy__astropy-7166 \
   --context jobs/.inputs/preinstalled-node-build \
-  --manifest experiments/pi-images/local.json
+  --manifest experiments/pi-images/swe-bench-verified/local.json
 ```
 
 构建上下文包含 `nvm.sh` 和 `node.tar.xz`，材料下载和核验需要在构建前
 完成。当前方案仅支持已在 `task.toml` 的 `environment.docker_image` 绑定、
 本机存在的 amd64 基础镜像。每个 Case 可分别运行 `build`，共用一份清单。
-仓库跟踪 `experiments/pi-images/local.json` 和 `experiment-host.json`，分别
+仓库跟踪 `experiments/pi-images/swe-bench-verified/local.json` 和 `experiment-host.json`，分别
 记录开发机与实验机已构建的镜像。清单可通过 Git 同步，但 Docker 镜像本身
 不会随 Git 同步；其他机器需先准备匹配的镜像或为其单独构建并记录清单。
 生成前会检查实际镜像 ID，清单过期或在错误的机器上使用时会报错。
@@ -119,7 +119,7 @@ python scripts/pi_image_cases.py build \
 ```bash
 python scripts/pi_image_cases.py prepare \
   --template jobs/.inputs/pi-images/probe-template.json \
-  --manifest experiments/pi-images/local.json \
+  --manifest experiments/pi-images/swe-bench-verified/local.json \
   --output jobs/.inputs/pi-images/run-001
 PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}" harbor run \
   -c jobs/.inputs/pi-images/run-001/job.json
