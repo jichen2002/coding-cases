@@ -68,6 +68,31 @@ Web Search/Subagent 没有加入默认运行配置，本轮不执行它们的安
 可通过 `kwargs.context_window` 和 `kwargs.compaction_trigger_ratio` 覆盖窗口与
 触发比例。该上下文元数据由 Pi 使用；Harbor 本身不从 vLLM 自动同步它。
 
+## 复用镜像中预装的 Node
+
+为 Agent 的 `kwargs` 显式设置 `"preinstalled_node": true` 后，adapter 会加载
+执行用户的 `~/.nvm/nvm.sh`，检查 Node 主版本为 22，再从配置的 npm registry
+安装 Pi；不再执行 Harbor 的 nvm 下载。镜像需为实际 Agent 用户预装 nvm、
+Node 和 npm，并设置 nvm 默认版本。此选项目前不支持 Pi MCP servers；未设置时
+沿用原来的 Harbor 安装流程。它不会改变 Case 原有镜像或其他 Job。
+
+可用 `scripts/pi-preinstalled-node.Dockerfile` 为已有的 Case 镜像制作派生镜像。
+构建上下文需要 `nvm.sh`（nvm v0.40.2，SHA-256
+`9290aec6cc2efc89273e16a77214eb37303caaff8c943102de5116fdef47ba86`）
+和 `node.tar.xz`（Node v22.23.4 的 Linux x64 官方分发包，构建前应核验
+SHA-256）。例如：
+
+```bash
+docker build --network none -f scripts/pi-preinstalled-node.Dockerfile \
+  --build-arg BASE_IMAGE=harbor-local/astropy__astropy-7166:1ea65be86880a878 \
+  -t harbor-local/astropy-7166-pi-node:22.23.4 "$BUILD_CONTEXT"
+```
+
+Dockerfile 目前针对 root 和 Linux x64；其他执行用户或架构需要对应调整。
+在独立的 Case 副本中绑定派生镜像，Agent 和 Verifier 的环境分别设置
+`PIP_INDEX_URL`、`UV_DEFAULT_INDEX`、`npm_config_registry`，并清空代理变量。
+构建时使用的文件、镜像来源、校验值和运行时 registry 应保留在实验记录中。
+
 ## 结果与限制
 
 结果位于每个 Trial 的 `agent/probes/`：

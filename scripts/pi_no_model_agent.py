@@ -4,7 +4,8 @@ from pathlib import Path
 import shlex
 
 from pydantic import Field, field_validator
-from harbor.agents.installed.pi import Pi, PiOptions
+from packaging.version import InvalidVersion, Version
+from harbor.agents.installed.pi import Pi, PiOptions, _PI_MAX_TURNS_MIN_VERSION
 from harbor.environments.base import BaseEnvironment
 from harbor.models.agent.context import AgentContext
 
@@ -54,6 +55,7 @@ export default function (pi: ExtensionAPI) {{
 
 class PiComponentOptions(PiOptions):
     components: list[str] = Field(default_factory=list)
+    preinstalled_node: bool = False
     temperature: float | None = Field(default=None, ge=0, le=2)
     context_window: int = Field(default=DEFAULT_CONTEXT_WINDOW, ge=1)
     compaction_trigger_ratio: float = Field(
@@ -93,7 +95,10 @@ class PiComponentAgent(Pi):
         # Enforce the same config root for native Pi, package installation, and probes.
         if self._get_env("PI_CODING_AGENT_DIR") != AGENT_DIR:
             raise ValueError(f"PI_CODING_AGENT_DIR must be {AGENT_DIR}")
-        await super().install(environment)
+        if self.options.preinstalled_node:
+            await self._install_with_preinstalled_node(environment)
+        else:
+            await super().install(environment)
         await install_components(self, environment, self.options.components)
         await self._ensure_config_dir(environment)
         settings = compaction_settings(
@@ -124,6 +129,30 @@ class PiComponentAgent(Pi):
         )
         self.selection["installation"] = "completed"
         self.selection_path.write_text(json.dumps(self.selection, indent=2) + "\n")
+
+    async def _install_with_preinstalled_node(self, environment: BaseEnvironment) -> None:
+        """Use the image's nvm/Node and install Pi without downloading nvm."""
+        if self.mcp_servers:
+            raise ValueError("preinstalled_node does not yet support Pi MCP servers")
+        version = self._version
+        if self.options.max_turns is not None and version and version != "latest":
+            try:
+                parsed_version = Version(version)
+            except InvalidVersion as exc:
+                raise ValueError("Pi max_turns requires a valid Pi version") from exc
+            if parsed_version < _PI_MAX_TURNS_MIN_VERSION:
+                raise ValueError(f"Pi max_turns requires Pi >= {_PI_MAX_TURNS_MIN_VERSION}")
+        package = self._package_name() + "@" + (version or "latest")
+        await self.exec_as_agent(
+            environment,
+            command=(
+                'set -euo pipefail; . "$HOME/.nvm/nvm.sh"; '
+                'node --version; npm --version; '
+                "node -e 'if (process.versions.node.split(\".\")[0] !== \"22\") "
+                "{ console.error(\"preinstalled_node requires Node 22\"); process.exit(1); }'; "
+                f'npm install -g --ignore-scripts {shlex.quote(package)}; pi --version'
+            ),
+        )
 
 
 class PiComponentInstaller(PiComponentAgent):

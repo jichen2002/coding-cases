@@ -2,6 +2,8 @@
 import json
 from pathlib import Path
 import unittest
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 from harbor.models.job.config import JobConfig
 from pydantic import ValidationError
@@ -50,6 +52,10 @@ class ComponentConfigTest(unittest.TestCase):
                     PiComponentAgent.options_model.model_validate(
                         {"temperature": invalid}
                     )
+
+    def test_preinstalled_node_is_opt_in(self):
+        self.assertFalse(PiComponentAgent.options_model.model_validate({}).preinstalled_node)
+        self.assertTrue(PiComponentAgent.options_model.model_validate({"preinstalled_node": True}).preinstalled_node)
 
     def test_pi_context_and_compaction_defaults_are_written_explicitly(self):
         settings = compaction_settings(262144, 0.9)
@@ -117,6 +123,29 @@ class ComponentConfigTest(unittest.TestCase):
         self.assertEqual(result["expectedExtensions"], 1)
         self.assertIn("lsp_definition", result["expectedTools"])
         self.assertEqual(result["verification"], "not_tested")
+
+
+class PreinstalledNodeTest(unittest.IsolatedAsyncioTestCase):
+    async def test_reuses_nvm_and_installs_pinned_pi(self):
+        agent = SimpleNamespace(
+            mcp_servers=[], _version="1.4.0", options=SimpleNamespace(max_turns=100),
+            _package_name=lambda: "@earendil-works/pi-coding-agent", exec_as_agent=AsyncMock(),
+        )
+        await PiComponentAgent._install_with_preinstalled_node(agent, object())
+        command = agent.exec_as_agent.await_args.kwargs["command"]
+        self.assertIn('"$HOME/.nvm/nvm.sh"', command)
+        self.assertIn("@earendil-works/pi-coding-agent@1.4.0", command)
+        self.assertNotIn("curl", command)
+
+    async def test_unsupported_mcp_and_old_turn_limit_fail(self):
+        agent = SimpleNamespace(mcp_servers=["server"], _version="1.4.0", options=SimpleNamespace(max_turns=None))
+        with self.assertRaisesRegex(ValueError, "MCP"):
+            await PiComponentAgent._install_with_preinstalled_node(agent, object())
+        agent.mcp_servers = []
+        agent._version = "0.0.1"
+        agent.options.max_turns = 100
+        with self.assertRaisesRegex(ValueError, "max_turns"):
+            await PiComponentAgent._install_with_preinstalled_node(agent, object())
 
 
 if __name__ == "__main__":
