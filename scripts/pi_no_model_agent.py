@@ -35,8 +35,26 @@ def set_model_context_window(models_json: dict, context_window: int) -> dict:
     return models_json
 
 
+def temperature_extension(temperature: float) -> str:
+    """Return a Pi hook that sets and records the sampling temperature."""
+    return f'''import {{ appendFileSync }} from "node:fs";
+import type {{ ExtensionAPI }} from "@earendil-works/pi-coding-agent";
+
+export default function (pi: ExtensionAPI) {{
+  pi.on("before_provider_request", (event) => {{
+    appendFileSync(
+      "/logs/agent/pi-temperature-requests.jsonl",
+      JSON.stringify({{ temperature: {temperature}, model: event.payload.model }}) + "\\n",
+    );
+    return {{ ...event.payload, temperature: {temperature} }};
+  }});
+}}
+'''
+
+
 class PiComponentOptions(PiOptions):
     components: list[str] = Field(default_factory=list)
+    temperature: float | None = Field(default=None, ge=0, le=2)
     context_window: int = Field(default=DEFAULT_CONTEXT_WINDOW, ge=1)
     compaction_trigger_ratio: float = Field(
         default=DEFAULT_COMPACTION_TRIGGER_RATIO, gt=0, lt=1
@@ -82,12 +100,22 @@ class PiComponentAgent(Pi):
             self.options.context_window,
             self.options.compaction_trigger_ratio,
         )
+        if self.options.temperature is not None:
+            extension_path = f"{AGENT_DIR}/temperature.ts"
+            await self._upload_config_text(
+                environment,
+                content=temperature_extension(self.options.temperature),
+                remote_path=extension_path,
+                filename="temperature.ts",
+            )
+            settings["extensions"] = [extension_path]
         script = (
             "const fs=require('node:fs');"
             "const p=process.env.PI_CODING_AGENT_DIR+'/settings.json';"
             "const c=fs.existsSync(p)?JSON.parse(fs.readFileSync(p,'utf8')):{};"
             f"const incoming={json.dumps(settings)};"
             "c.compaction={...(c.compaction||{}),...incoming.compaction};"
+            "if(incoming.extensions)c.extensions=[...new Set([...(c.extensions||[]),...incoming.extensions])];"
             "fs.writeFileSync(p,JSON.stringify(c,null,2)+'\\n');"
         )
         await self.exec_as_agent(

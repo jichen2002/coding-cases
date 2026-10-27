@@ -11,6 +11,7 @@ from scripts.pi_no_model_agent import (
     PiNoModelProbe,
     compaction_settings,
     set_model_context_window,
+    temperature_extension,
 )
 from scripts.pi_components import manifest
 
@@ -35,6 +36,20 @@ class ComponentConfigTest(unittest.TestCase):
         self.assertEqual(options.model_api, "openai-completions")
         self.assertEqual(options.context_window, 262144)
         self.assertEqual(options.compaction_trigger_ratio, 0.9)
+
+    def test_temperature_is_validated_and_extension_pins_request_payload(self):
+        options = PiComponentAgent.options_model.model_validate({"temperature": 0.6})
+        self.assertEqual(options.temperature, 0.6)
+        source = temperature_extension(0.6)
+        self.assertIn('pi.on("before_provider_request"', source)
+        self.assertIn("temperature: 0.6", source)
+        self.assertIn("pi-temperature-requests.jsonl", source)
+        for invalid in (-0.1, 2.1):
+            with self.subTest(temperature=invalid):
+                with self.assertRaises(ValidationError):
+                    PiComponentAgent.options_model.model_validate(
+                        {"temperature": invalid}
+                    )
 
     def test_pi_context_and_compaction_defaults_are_written_explicitly(self):
         settings = compaction_settings(262144, 0.9)
